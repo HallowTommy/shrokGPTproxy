@@ -21,7 +21,7 @@ WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear yo
 BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complete."
 
 async def forward_to_ai(message: str):
-    """Отправляет запрос в основной скрипт ИИ и получает ответ."""
+    """Отправляет запрос в AI и получает ответ."""
     global is_processing, block_time
 
     print(f"[FORWARD] Отправка запроса в AI: {message}")
@@ -35,8 +35,16 @@ async def forward_to_ai(message: str):
             processing_data = json.loads(processing_signal)
 
             if processing_data.get("processing"):
-                is_processing = True  # AI занят
+                is_processing = True  # AI подтвердил, что начал работу
                 print("[FORWARD] AI подтвердил, что начал обработку")
+
+                # 🔥 СРАЗУ отправляем заглушку ВСЕМ клиентам
+                for connection in list(active_connections):
+                    try:
+                        await connection.send_text(BUSY_MESSAGE)
+                    except Exception as e:
+                        print(f"[ERROR] Ошибка отправки заглушки клиенту: {e}")
+                        active_connections.remove(connection)
 
             # Ждём финальный ответ от AI
             response = await ai_ws.recv()
@@ -118,4 +126,3 @@ async def unblock_after_delay():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=9000)
-
