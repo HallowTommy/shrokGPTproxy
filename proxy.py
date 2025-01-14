@@ -61,13 +61,16 @@ async def proxy_websocket(websocket: WebSocket):
             message = await websocket.receive_text()
             print(f"Received message: {message}")
 
+            # Проверяем состояние AI перед обработкой сообщения
             if AI_BUSY:
                 print("ShrokAI is currently busy. Sending busy message.")
                 await websocket.send_text(BUSY_MESSAGE)
                 continue  # Не передаём сообщение в AI
             
             # AI свободен, пересылаем сообщение
+            AI_BUSY = True  # Пока AI обрабатывает, считаем, что он занят
             response = await forward_to_ai(message)
+            AI_BUSY = False  # Как только AI ответил, снова доступен
             
             # Рассылаем ответ всем клиентам
             for connection in list(active_connections):
