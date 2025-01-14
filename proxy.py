@@ -39,17 +39,25 @@ async def monitor_ai_status():
         await asyncio.sleep(1)  # Проверяем каждую секунду
 
 async def forward_to_ai(message: str):
-    """Отправляет запрос в основной скрипт ИИ и получает ответ."""
-    global AI_BUSY  # ✅ Добавляем глобальную переменную
+    """Отправляет запрос в AI и получает ответ."""
+    global AI_BUSY
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
-            await ai_ws.send(message)  # Отправляем текст в AI
+            await ai_ws.send(json.dumps({"text": message}))  # ✅ Оборачиваем в JSON
 
-            response = await ai_ws.recv()  # Ждём финальный ответ от ИИ
-            data = json.loads(response)  # Разбираем JSON-ответ
-            return data.get("response", "ShrokAI is silent...")  # Возвращаем текст
+            response = await ai_ws.recv()  # ✅ Ждём ответ
+            data = json.loads(response)  
+
+            if "error" in data:
+                print(f"❌ AI вернул ошибку: {data['error']}")
+                return "ShrokAI encountered an issue. Try again later."
+
+            return data.get("response", "ShrokAI is silent...")  # ✅ Отправляем корректный ответ
+    except websockets.exceptions.ConnectionClosed:
+        print("❌ WebSocket с AI разорван. Повторная попытка...")
+        return "ShrokAI is currently unavailable. Try again later."
     except Exception as e:
-        print(f"Error communicating with AI server: {e}")
+        print(f"❌ Ошибка связи с AI: {e}")
         return "ShrokAI encountered an issue. Try again later."
 
 @app.websocket("/ws/proxy")
