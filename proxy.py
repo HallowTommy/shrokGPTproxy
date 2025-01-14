@@ -9,89 +9,70 @@ app = FastAPI()
 # List of active WebSocket connections
 active_connections = set()
 
-# Global variable to track AI status
-AI_BUSY = False  # True - AI занят, False - свободен
+# Global control variables
+is_processing = False  # Blocks new requests while a response is being generated
+block_time = 0  # Stores the time (in seconds) for which new requests are blocked
 
 # AI WebSocket Server (Main AI Script)
-AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"
+AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Адрес WebSocket ИИ
 
 # Welcome and busy messages
 WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
 BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complete."
 
-async def monitor_ai_status():
-    """Постоянный мониторинг состояния AI (раз в секунду)."""
-    global AI_BUSY
-    while True:
-        try:
-            async with websockets.connect(AI_SERVER_URL) as ai_ws:
-                await ai_ws.send(json.dumps({"status_request": True}))  # Запрос статуса AI
-                status_response = await asyncio.wait_for(ai_ws.recv(), timeout=5)  # ⏳ Таймаут 5 сек
-                data = json.loads(status_response)
-                AI_BUSY = data.get("processing", False)  # Синхронизация состояния с AI
-                print(f"AI_BUSY updated: {AI_BUSY}")  # Логируем состояние AI
-        except asyncio.TimeoutError:
-            print("AI status check timed out! Assuming AI is free.")
-            AI_BUSY = False  # Если AI не отвечает, считаем, что он свободен
-        except Exception as e:
-            print(f"Error checking AI status: {e}")
-            AI_BUSY = False  # Если ошибка соединения — считаем, что AI свободен
-        await asyncio.sleep(1)  # Проверяем каждую секунду
-
 async def forward_to_ai(message: str):
-    """Отправляет запрос в AI и получает ответ."""
-    global AI_BUSY
+    """Отправляет запрос в основной скрипт ИИ и получает ответ."""
+    global is_processing, block_time
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
-            await ai_ws.send(json.dumps({"text": message}))  # ✅ Оборачиваем в JSON
+            await ai_ws.send(message)  # Отправляем запрос в основной ИИ
+            
+            # Ждём сигнал, что обработка началась
+            processing_signal = await ai_ws.recv()
+            processing_data = json.loads(processing_signal)
+            if processing_data.get("processing"):
+                is_processing = True  # Моментально ставим флаг, что ИИ занят
 
-            response = await ai_ws.recv()  # ✅ Ждём ответ
-            data = json.loads(response)  
-
-            if "error" in data:
-                print(f"❌ AI вернул ошибку: {data['error']}")
-                return "ShrokAI encountered an issue. Try again later."
-
-            return data.get("response", "ShrokAI is silent...")  # ✅ Отправляем корректный ответ
-    except websockets.exceptions.ConnectionClosed:
-        print("❌ WebSocket с AI разорван. Повторная попытка...")
-        return "ShrokAI is currently unavailable. Try again later."
+            response = await ai_ws.recv()  # Ждём финальный ответ от ИИ
+            data = json.loads(response)  # Разбираем JSON-ответ
+            block_time = data.get("audio_length", 0) + 10  # Устанавливаем время блокировки
+            return data.get("response", "ShrokAI is silent...")
     except Exception as e:
-        print(f"❌ Ошибка связи с AI: {e}")
+        print(f"Error communicating with AI server: {e}")
         return "ShrokAI encountered an issue. Try again later."
 
 @app.websocket("/ws/proxy")
 async def proxy_websocket(websocket: WebSocket):
-    global AI_BUSY
+    global is_processing
     await websocket.accept()
     active_connections.add(websocket)
     
-    # Отправляем приветственное сообщение
+    # Send welcome message
     await websocket.send_text(WELCOME_MESSAGE)
     
     try:
         while True:
             message = await websocket.receive_text()
             print(f"Received message: {message}")
-
-            # Проверяем состояние AI перед обработкой сообщения
-            if AI_BUSY:
+            
+            if is_processing:
                 print("ShrokAI is currently busy. Sending busy message.")
-                await websocket.send_text(BUSY_MESSAGE)  # ✅ Логируем отправку BUSY_MESSAGE
-                continue  # Не передаём сообщение в AI
+                await websocket.send_text(BUSY_MESSAGE)
+                continue  # Прерываем выполнение для этого пользователя
             
-            # AI свободен, пересылаем сообщение
-            AI_BUSY = True  # Пока AI обрабатывает, считаем, что он занят
+            # Forward message to AI server
             response = await forward_to_ai(message)
-            AI_BUSY = False  # Как только AI ответил, снова доступен
             
-            # Рассылаем ответ всем клиентам
+            # Рассылаем ответ от ИИ всем пользователям
             for connection in list(active_connections):
                 try:
                     await connection.send_text(response)
                 except Exception as e:
                     print(f"Failed to send message to client: {e}")
                     active_connections.remove(connection)
+                    
+            # Стартуем таймер разблокировки
+            asyncio.create_task(unblock_after_delay())
 
     except WebSocketDisconnect:
         print("WebSocket disconnected")
@@ -100,8 +81,14 @@ async def proxy_websocket(websocket: WebSocket):
         print(f"Unexpected error: {e}")
         await websocket.close(code=1001)
 
+async def unblock_after_delay():
+    """Функция для снятия блокировки после задержки."""
+    global is_processing
+    print(f"Blocking requests for {block_time} seconds...")
+    await asyncio.sleep(block_time)
+    is_processing = False
+    print("Unblocking requests.")
+
 if __name__ == "__main__":
     import uvicorn
-    loop = asyncio.get_event_loop()
-    loop.create_task(monitor_ai_status())  # Запускаем постоянный мониторинг AI
     uvicorn.run(app, host="0.0.0.0", port=9000)
