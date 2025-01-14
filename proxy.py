@@ -3,32 +3,25 @@ import asyncio
 import websockets
 import json
 
-# Initialize FastAPI
 app = FastAPI()
-
-# List of active WebSocket connections
 active_connections = set()
+is_processing = False  # Флаг блокировки новых запросов
+block_time = 0  # Время блокировки
 
-# Global control variables
-is_processing = False  # Blocks new requests while a response is being generated
-block_time = 0  # Stores the time (in seconds) for which new requests are blocked
+AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"
 
-# AI WebSocket Server (Main AI Script)
-AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Обновленный адрес WebSocket ИИ
-
-# Welcome and busy messages
 WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
 BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complete."
 
 async def forward_to_ai(message: str):
     """Отправляет запрос в основной скрипт ИИ и получает ответ."""
-    global block_time
+    global is_processing, block_time
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
-            await ai_ws.send(message)  # Отправляем запрос в основной ИИ
-            response = await ai_ws.recv()  # Ждём ответ от ИИ
-            data = json.loads(response)  # Разбираем JSON-ответ
-            block_time = data.get("audio_length", 0) + 10  # Устанавливаем время блокировки
+            await ai_ws.send(message)
+            response = await ai_ws.recv()
+            data = json.loads(response)
+            block_time = data.get("audio_length", 0) + 10  # Время блокировки
             return data.get("response", "ShrokAI is silent...")
     except Exception as e:
         print(f"Error communicating with AI server: {e}")
@@ -39,46 +32,43 @@ async def proxy_websocket(websocket: WebSocket):
     global is_processing
     await websocket.accept()
     active_connections.add(websocket)
-    
-    # Send welcome message
-    await websocket.send_text(WELCOME_MESSAGE)
+
+    await websocket.send_text(WELCOME_MESSAGE)  # Отправка приветствия
     
     try:
         while True:
             message = await websocket.receive_text()
             print(f"Received message: {message}")
-            
-            # Если ИИ уже обрабатывает запрос, сразу отправляем заглушку
+
             if is_processing:
                 print("ShrokAI is currently busy. Sending busy message.")
                 await websocket.send_text(BUSY_MESSAGE)
-                continue  # Не передаём сообщение в ИИ
-            
-            # Первое принятое сообщение помечаем как активный процесс
+                continue
+
+            # ✅ 1. Устанавливаем `is_processing = True` СРАЗУ
             is_processing = True
             print("Processing started. Blocking new requests.")
 
-            # **Отправляем заглушку всем пользователям, кроме отправителя**
+            # ✅ 2. Оповещаем всех пользователей, что ИИ занят
             for connection in list(active_connections):
-                if connection != websocket:  # Исключаем отправителя
-                    try:
-                        await connection.send_text(BUSY_MESSAGE)
-                    except Exception as e:
-                        print(f"Failed to send busy message to a client: {e}")
-                        active_connections.remove(connection)
+                try:
+                    await connection.send_text(BUSY_MESSAGE)
+                except Exception as e:
+                    print(f"Failed to send busy message to a client: {e}")
+                    active_connections.remove(connection)
 
-            # Передаём запрос в основной ИИ
+            # ✅ 3. Передаём сообщение в ИИ
             response = await forward_to_ai(message)
 
-            # Рассылаем ответ от ИИ всем пользователям
+            # ✅ 4. Отправляем ответ всем пользователям
             for connection in list(active_connections):
                 try:
                     await connection.send_text(response)
                 except Exception as e:
                     print(f"Failed to send message to client: {e}")
                     active_connections.remove(connection)
-                    
-            # Стартуем таймер разблокировки
+
+            # ✅ 5. Запускаем таймер разблокировки
             asyncio.create_task(unblock_after_delay())
 
     except WebSocketDisconnect:
