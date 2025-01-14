@@ -20,9 +20,9 @@ is_processing = False  # AI в процессе обработки?
 block_time = 0  # Время блокировки перед следующим запросом
 
 # Сообщения пользователям
-WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
-BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complete."
-REQUEST_RECEIVED_MESSAGE = "Request received. Thinking of a reply..."
+WELCOME_MESSAGE = "Mention @ShrokAI, and I’ll respond… probably. If I’m not lost in a mushroom trip."
+BUSY_MESSAGE = "Thinking... but the mushrooms have other plans for my brain."
+REQUEST_RECEIVED_MESSAGE = "Loud and clear! Now, how about some mushrooms to enhance the conversation?"
 
 async def process_queue():
     """Функция, которая обрабатывает очередь входящих сообщений."""
@@ -79,13 +79,13 @@ async def forward_to_ai(message: str):
                     response = await ai_ws.recv()  # 🔥 Ждем ответ без таймаута
                 except websockets.ConnectionClosed:
                     print("[ERROR] WebSocket AI закрыл соединение неожиданно!")
-                    return "ShrokAI encountered an issue. Connection lost."
+                    return "Overdosed on swamp shrooms—brain.exe not found."
 
                 try:
                     data = json.loads(response)
                 except json.JSONDecodeError:
                     print(f"[ERROR] Ошибка декодирования JSON: {response}")
-                    return "ShrokAI encountered an issue. Invalid response from AI server."
+                    return "Overdosed on swamp shrooms—brain.exe not found."
 
                 # 🔥 Если это просто сигнал "processing", игнорируем и ждём реальный ответ
                 if "processing" in data:
@@ -95,7 +95,7 @@ async def forward_to_ai(message: str):
                 # Если пришел настоящий ответ - обрабатываем его
                 if "response" not in data or "audio_length" not in data:
                     print(f"[ERROR] Некорректный JSON-ответ от AI: {data}")
-                    return "ShrokAI encountered an issue. Missing response data."
+                    return "Overdosed on swamp shrooms—brain.exe not found."
 
                 block_time = data["audio_length"] + 10  # Блокируем новые запросы на время
                 print(f"[FORWARD] Получен ответ от AI: {data['response']} (block_time={block_time}s)")
@@ -104,7 +104,7 @@ async def forward_to_ai(message: str):
 
     except Exception as e:
         print(f"[ERROR] Ошибка связи с AI сервером: {e}")
-        return "ShrokAI encountered an issue. Try again later."
+        return "Overdosed on swamp shrooms—brain.exe not found."
 
 @app.websocket("/ws/proxy")
 async def proxy_websocket(websocket: WebSocket):
