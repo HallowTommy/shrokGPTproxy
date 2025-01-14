@@ -74,25 +74,30 @@ async def forward_to_ai(message: str):
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
             await ai_ws.send(message)
 
-            # ✅ Теперь `is_processing = True` УЖЕ УСТАНОВЛЕН! 
+            while True:
+                # Ждём ответ от AI
+                response = await ai_ws.recv()
 
-            # Ждём финальный ответ от AI
-            response = await ai_ws.recv()
+                try:
+                    data = json.loads(response)
+                except json.JSONDecodeError:
+                    print(f"[ERROR] Ошибка декодирования JSON: {response}")
+                    return "ShrokAI encountered an issue. Invalid response from AI server."
 
-            try:
-                data = json.loads(response)
-            except json.JSONDecodeError:
-                print(f"[ERROR] Ошибка декодирования JSON: {response}")
-                return "ShrokAI encountered an issue. Invalid response from AI server."
+                # 🔥 Если это просто сигнал "processing", игнорируем и ждём реальный ответ
+                if "processing" in data:
+                    print("[INFO] AI подтвердил начало обработки, ждём реальный ответ...")
+                    continue  
 
-            if "response" not in data or "audio_length" not in data:
-                print(f"[ERROR] Некорректный JSON-ответ от AI: {data}")
-                return "ShrokAI encountered an issue. Missing response data."
+                # Если пришел настоящий ответ - обрабатываем его
+                if "response" not in data or "audio_length" not in data:
+                    print(f"[ERROR] Некорректный JSON-ответ от AI: {data}")
+                    return "ShrokAI encountered an issue. Missing response data."
 
-            block_time = data["audio_length"] + 10  # Блокируем новые запросы на время
-            print(f"[FORWARD] Получен ответ от AI: {data['response']} (block_time={block_time}s)")
+                block_time = data["audio_length"] + 10  # Блокируем новые запросы на время
+                print(f"[FORWARD] Получен ответ от AI: {data['response']} (block_time={block_time}s)")
 
-            return data["response"]
+                return data["response"]
 
     except Exception as e:
         print(f"[ERROR] Ошибка связи с AI сервером: {e}")
