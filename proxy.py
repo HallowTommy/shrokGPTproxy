@@ -29,15 +29,14 @@ async def process_queue():
     global is_processing
 
     while True:
-        # Ждём следующий запрос из очереди
         message, websocket = await message_queue.get()
 
-        # Если AI уже обрабатывает другой запрос — мгновенно отправляем BUSY_MESSAGE
+        # 🔥 Ставим AI в занятость моментально, как только запрос попадает в обработку
         if is_processing:
             print("[BUSY] AI уже занят, отправляем заглушку клиенту")
             await websocket.send_text(BUSY_MESSAGE)
             continue  # Пропускаем обработку и ждём следующий запрос
-        
+
         # AI теперь в обработке
         is_processing = True
         print(f"[PROCESSING] AI принял новый запрос: {message}")
@@ -69,12 +68,7 @@ async def forward_to_ai(message: str):
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
             await ai_ws.send(message)
 
-            # Ждём сигнал, что AI начал обработку
-            processing_signal = await ai_ws.recv()
-            processing_data = json.loads(processing_signal)
-
-            if processing_data.get("processing"):
-                print("[FORWARD] AI подтвердил, что начал обработку")
+            # ✅ Теперь `is_processing = True` УЖЕ УСТАНОВЛЕН! 
 
             # Ждём финальный ответ от AI
             response = await ai_ws.recv()
