@@ -21,7 +21,7 @@ BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complet
 
 async def monitor_ai_status():
     """Постоянный мониторинг состояния AI (раз в секунду)."""
-    global AI_BUSY
+    global AI_BUSY  # ✅ Добавляем глобальную переменную
     while True:
         try:
             async with websockets.connect(AI_SERVER_URL) as ai_ws:
@@ -37,6 +37,7 @@ async def monitor_ai_status():
 
 async def forward_to_ai(message: str):
     """Отправляет запрос в основной скрипт ИИ и получает ответ."""
+    global AI_BUSY  # ✅ Добавляем глобальную переменную
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
             await ai_ws.send(message)  # Отправляем текст в AI
@@ -50,6 +51,7 @@ async def forward_to_ai(message: str):
 
 @app.websocket("/ws/proxy")
 async def proxy_websocket(websocket: WebSocket):
+    global AI_BUSY  # ✅ Добавляем глобальную переменную
     await websocket.accept()
     active_connections.add(websocket)
     
