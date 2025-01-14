@@ -71,12 +71,15 @@ async def forward_to_ai(message: str):
     print(f"[FORWARD] Отправка запроса в AI: {message}")
 
     try:
-        async with websockets.connect(AI_SERVER_URL) as ai_ws:
+        async with websockets.connect(AI_SERVER_URL, ping_interval=10, ping_timeout=None) as ai_ws:
             await ai_ws.send(message)
 
             while True:
-                # Ждём ответ от AI
-                response = await ai_ws.recv()
+                try:
+                    response = await ai_ws.recv()  # 🔥 Ждем ответ без таймаута
+                except websockets.ConnectionClosed:
+                    print("[ERROR] WebSocket AI закрыл соединение неожиданно!")
+                    return "ShrokAI encountered an issue. Connection lost."
 
                 try:
                     data = json.loads(response)
