@@ -54,7 +54,7 @@ async def forward_to_ai(message: str):
 
 @app.websocket("/ws/proxy")
 async def proxy_websocket(websocket: WebSocket):
-    global AI_BUSY  # ✅ Добавляем глобальную переменную
+    global AI_BUSY
     await websocket.accept()
     active_connections.add(websocket)
     
@@ -69,7 +69,7 @@ async def proxy_websocket(websocket: WebSocket):
             # Проверяем состояние AI перед обработкой сообщения
             if AI_BUSY:
                 print("ShrokAI is currently busy. Sending busy message.")
-                await websocket.send_text(BUSY_MESSAGE)
+                await websocket.send_text(BUSY_MESSAGE)  # ✅ Логируем отправку BUSY_MESSAGE
                 continue  # Не передаём сообщение в AI
             
             # AI свободен, пересылаем сообщение
