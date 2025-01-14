@@ -26,7 +26,14 @@ async def forward_to_ai(message: str):
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
             await ai_ws.send(message)  # Отправляем запрос в основной ИИ
-            response = await ai_ws.recv()  # Ждём ответ от ИИ
+            
+            # Ждём сигнал, что обработка началась
+            processing_signal = await ai_ws.recv()
+            processing_data = json.loads(processing_signal)
+            if processing_data.get("processing"):
+                is_processing = True  # Моментально ставим флаг, что ИИ занят
+
+            response = await ai_ws.recv()  # Ждём финальный ответ от ИИ
             data = json.loads(response)  # Разбираем JSON-ответ
             block_time = data.get("audio_length", 0) + 10  # Устанавливаем время блокировки
             return data.get("response", "ShrokAI is silent...")
@@ -50,13 +57,10 @@ async def proxy_websocket(websocket: WebSocket):
             
             if is_processing:
                 print("ShrokAI is currently busy. Sending busy message.")
-                await websocket.send_text(BUSY_MESSAGE)  # Теперь заглушка уходит моментально
+                await websocket.send_text(BUSY_MESSAGE)
                 continue  # Прерываем выполнение для этого пользователя
             
-            # Помечаем, что началась обработка (ДЕЛАЕМ ЭТО СРАЗУ)
-            is_processing = True
-            
-            # Forward message to AI server (отправляем только ОДИН запрос)
+            # Forward message to AI server
             response = await forward_to_ai(message)
             
             # Рассылаем ответ от ИИ всем пользователям
