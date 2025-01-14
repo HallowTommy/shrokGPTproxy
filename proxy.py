@@ -14,7 +14,7 @@ is_processing = False  # Blocks new requests while a response is being generated
 block_time = 0  # Stores the time (in seconds) for which new requests are blocked
 
 # AI WebSocket Server (Main AI Script)
-AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Обновленный адрес WebSocket ИИ
+AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Адрес WebSocket ИИ
 
 # Welcome and busy messages
 WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
@@ -50,21 +50,13 @@ async def proxy_websocket(websocket: WebSocket):
             
             if is_processing:
                 print("ShrokAI is currently busy. Sending busy message.")
-                await websocket.send_text(BUSY_MESSAGE)
-                continue  # Не передаём сообщение в ИИ, если он уже обрабатывает запрос
+                await websocket.send_text(BUSY_MESSAGE)  # Теперь заглушка уходит моментально
+                continue  # Прерываем выполнение для этого пользователя
             
             # Помечаем, что началась обработка (ДЕЛАЕМ ЭТО СРАЗУ)
             is_processing = True
             
-            # Оповещаем всех пользователей, что ИИ занят
-            for connection in list(active_connections):
-                try:
-                    await connection.send_text(BUSY_MESSAGE)
-                except Exception as e:
-                    print(f"Failed to send busy message to a client: {e}")
-                    active_connections.remove(connection)
-
-            # Forward message to AI server
+            # Forward message to AI server (отправляем только ОДИН запрос)
             response = await forward_to_ai(message)
             
             # Рассылаем ответ от ИИ всем пользователям
