@@ -31,10 +31,13 @@ async def process_queue():
     while True:
         message, websocket = await message_queue.get()
 
-        # 🔥 Ставим AI в занятость моментально, как только запрос попадает в обработку
+        # ✅ Ставим AI в занятость моментально, как только запрос попадает в обработку
         if is_processing:
             print("[BUSY] AI уже занят, отправляем заглушку клиенту")
-            await websocket.send_text(BUSY_MESSAGE)
+            try:
+                await websocket.send_text(BUSY_MESSAGE)
+            except WebSocketDisconnect:
+                print("[DISCONNECT] Клиент отключился во время отправки заглушки")
             continue  # Пропускаем обработку и ждём следующий запрос
 
         # AI теперь в обработке
@@ -42,7 +45,10 @@ async def process_queue():
         print(f"[PROCESSING] AI принял новый запрос: {message}")
 
         # Сообщаем пользователю, что запрос принят
-        await websocket.send_text(REQUEST_RECEIVED_MESSAGE)
+        try:
+            await websocket.send_text(REQUEST_RECEIVED_MESSAGE)
+        except WebSocketDisconnect:
+            print("[DISCONNECT] Клиент отключился во время отправки 'Request received'")
 
         # Запускаем обработку запроса
         response = await forward_to_ai(message)
@@ -107,6 +113,12 @@ async def proxy_websocket(websocket: WebSocket):
         while True:
             message = await websocket.receive_text()
             print(f"[MESSAGE] Получено сообщение: {message}")
+
+            # ✅ Сразу проверяем статус AI и отправляем заглушку без ожидания
+            if is_processing:
+                print("[BUSY] AI уже занят, мгновенно отправляем заглушку клиенту")
+                await websocket.send_text(BUSY_MESSAGE)
+                continue  # Пропускаем добавление в очередь
 
             # Добавляем запрос в очередь
             await message_queue.put((message, websocket))
