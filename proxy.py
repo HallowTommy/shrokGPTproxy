@@ -48,24 +48,26 @@ async def proxy_websocket(websocket: WebSocket):
             message = await websocket.receive_text()
             print(f"Received message: {message}")
             
-            # Если ИИ уже занят, отправляем заглушку сразу
+            # Если ИИ уже обрабатывает запрос, сразу отправляем заглушку
             if is_processing:
                 print("ShrokAI is currently busy. Sending busy message.")
                 await websocket.send_text(BUSY_MESSAGE)
-                continue  # Прерываем обработку, не отправляя в ИИ
+                continue  # Не передаём сообщение в ИИ
             
-            # Здесь мы моментально блокируем обработку новых запросов
+            # Первое принятое сообщение помечаем как активный процесс
             is_processing = True
+            print("Processing started. Blocking new requests.")
 
-            # Оповещаем всех пользователей, что ИИ занят (дополнительно)
+            # **Отправляем заглушку всем пользователям, кроме отправителя**
             for connection in list(active_connections):
-                try:
-                    await connection.send_text(BUSY_MESSAGE)
-                except Exception as e:
-                    print(f"Failed to send busy message to a client: {e}")
-                    active_connections.remove(connection)
+                if connection != websocket:  # Исключаем отправителя
+                    try:
+                        await connection.send_text(BUSY_MESSAGE)
+                    except Exception as e:
+                        print(f"Failed to send busy message to a client: {e}")
+                        active_connections.remove(connection)
 
-            # Forward message to AI server
+            # Передаём запрос в основной ИИ
             response = await forward_to_ai(message)
 
             # Рассылаем ответ от ИИ всем пользователям
