@@ -14,7 +14,7 @@ is_processing = False  # Blocks new requests while a response is being generated
 block_time = 0  # Stores the time (in seconds) for which new requests are blocked
 
 # AI WebSocket Server (Main AI Script)
-AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Адрес WebSocket ИИ
+AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Обновленный адрес WebSocket ИИ
 
 # Welcome and busy messages
 WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
@@ -22,18 +22,11 @@ BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complet
 
 async def forward_to_ai(message: str):
     """Отправляет запрос в основной скрипт ИИ и получает ответ."""
-    global is_processing, block_time
+    global block_time
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
             await ai_ws.send(message)  # Отправляем запрос в основной ИИ
-            
-            # Ждём сигнал, что обработка началась
-            processing_signal = await ai_ws.recv()
-            processing_data = json.loads(processing_signal)
-            if processing_data.get("processing"):
-                is_processing = True  # Моментально ставим флаг, что ИИ занят
-
-            response = await ai_ws.recv()  # Ждём финальный ответ от ИИ
+            response = await ai_ws.recv()  # Ждём ответ от ИИ
             data = json.loads(response)  # Разбираем JSON-ответ
             block_time = data.get("audio_length", 0) + 10  # Устанавливаем время блокировки
             return data.get("response", "ShrokAI is silent...")
@@ -55,14 +48,26 @@ async def proxy_websocket(websocket: WebSocket):
             message = await websocket.receive_text()
             print(f"Received message: {message}")
             
+            # Если ИИ уже занят, отправляем заглушку сразу
             if is_processing:
                 print("ShrokAI is currently busy. Sending busy message.")
                 await websocket.send_text(BUSY_MESSAGE)
-                continue  # Прерываем выполнение для этого пользователя
+                continue  # Прерываем обработку, не отправляя в ИИ
             
+            # Здесь мы моментально блокируем обработку новых запросов
+            is_processing = True
+
+            # Оповещаем всех пользователей, что ИИ занят (дополнительно)
+            for connection in list(active_connections):
+                try:
+                    await connection.send_text(BUSY_MESSAGE)
+                except Exception as e:
+                    print(f"Failed to send busy message to a client: {e}")
+                    active_connections.remove(connection)
+
             # Forward message to AI server
             response = await forward_to_ai(message)
-            
+
             # Рассылаем ответ от ИИ всем пользователям
             for connection in list(active_connections):
                 try:
