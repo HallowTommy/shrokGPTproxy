@@ -24,6 +24,15 @@ WELCOME_MESSAGE = "Mention @ShrokAI, and I’ll respond… probably. If I’m no
 BUSY_MESSAGE = "Thinking... but the mushrooms have other plans for my brain."
 REQUEST_RECEIVED_MESSAGE = "Loud and clear! Now, how about some mushrooms to enhance the conversation?"
 
+async def broadcast_message(message):
+    """Рассылает сообщение всем подключённым пользователям."""
+    for connection in list(active_connections):
+        try:
+            await connection.send_text(message)
+        except Exception as e:
+            print(f"[ERROR] Ошибка отправки сообщения клиенту: {e}")
+            active_connections.remove(connection)  # Удаляем отключившегося пользователя
+
 async def process_queue():
     """Функция, которая обрабатывает очередь входящих сообщений."""
     global is_processing
@@ -33,33 +42,22 @@ async def process_queue():
 
         # ✅ Ставим AI в занятость моментально, как только запрос попадает в обработку
         if is_processing:
-            print("[BUSY] AI уже занят, отправляем заглушку клиенту")
-            try:
-                await websocket.send_text(BUSY_MESSAGE)
-            except WebSocketDisconnect:
-                print("[DISCONNECT] Клиент отключился во время отправки заглушки")
+            print("[BUSY] AI уже занят, рассылаем заглушку всем пользователям")
+            await broadcast_message(BUSY_MESSAGE)  # 🔥 Отправляем заглушку ВСЕМ
             continue  # Пропускаем обработку и ждём следующий запрос
 
         # AI теперь в обработке
         is_processing = True
         print(f"[PROCESSING] AI принял новый запрос: {message}")
 
-        # Сообщаем пользователю, что запрос принят
-        try:
-            await websocket.send_text(REQUEST_RECEIVED_MESSAGE)
-        except WebSocketDisconnect:
-            print("[DISCONNECT] Клиент отключился во время отправки 'Request received'")
+        # 🔥 Сообщаем всем пользователям, что запрос принят
+        await broadcast_message(REQUEST_RECEIVED_MESSAGE)
 
         # Запускаем обработку запроса
         response = await forward_to_ai(message)
 
         # Рассылаем ответ от AI всем пользователям
-        for connection in list(active_connections):
-            try:
-                await connection.send_text(response)
-            except Exception as e:
-                print(f"[ERROR] Ошибка отправки ответа клиенту: {e}")
-                active_connections.remove(connection)
+        await broadcast_message(response)
 
         # Разблокируем обработку новых запросов
         asyncio.create_task(unblock_after_delay())
@@ -122,10 +120,10 @@ async def proxy_websocket(websocket: WebSocket):
             message = await websocket.receive_text()
             print(f"[MESSAGE] Получено сообщение: {message}")
 
-            # ✅ Сразу проверяем статус AI и отправляем заглушку без ожидания
+            # ✅ Сразу проверяем статус AI и отправляем заглушку ВСЕМ пользователям
             if is_processing:
-                print("[BUSY] AI уже занят, мгновенно отправляем заглушку клиенту")
-                await websocket.send_text(BUSY_MESSAGE)
+                print("[BUSY] AI уже занят, мгновенно отправляем заглушку всем клиентам")
+                await broadcast_message(BUSY_MESSAGE)
                 continue  # Пропускаем добавление в очередь
 
             # Добавляем запрос в очередь
