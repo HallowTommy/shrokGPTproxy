@@ -21,15 +21,18 @@ BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complet
 
 async def monitor_ai_status():
     """Постоянный мониторинг состояния AI (раз в секунду)."""
-    global AI_BUSY  # ✅ Добавляем глобальную переменную
+    global AI_BUSY
     while True:
         try:
             async with websockets.connect(AI_SERVER_URL) as ai_ws:
                 await ai_ws.send(json.dumps({"status_request": True}))  # Запрос статуса AI
-                status_response = await ai_ws.recv()  # Получаем ответ
+                status_response = await asyncio.wait_for(ai_ws.recv(), timeout=5)  # ⏳ Таймаут 5 сек
                 data = json.loads(status_response)
                 AI_BUSY = data.get("processing", False)  # Синхронизация состояния с AI
                 print(f"AI_BUSY updated: {AI_BUSY}")  # Логируем состояние AI
+        except asyncio.TimeoutError:
+            print("AI status check timed out! Assuming AI is free.")
+            AI_BUSY = False  # Если AI не отвечает, считаем, что он свободен
         except Exception as e:
             print(f"Error checking AI status: {e}")
             AI_BUSY = False  # Если ошибка соединения — считаем, что AI свободен
