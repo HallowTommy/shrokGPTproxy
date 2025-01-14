@@ -14,7 +14,7 @@ is_processing = False  # Blocks new requests while a response is being generated
 block_time = 0  # Stores the time (in seconds) for which new requests are blocked
 
 # AI WebSocket Server (Main AI Script)
-AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Адрес основного ИИ
+AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Обновленный адрес WebSocket ИИ
 
 # Welcome and busy messages
 WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
@@ -22,7 +22,7 @@ BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complet
 
 async def forward_to_ai(message: str):
     """Отправляет запрос в основной скрипт ИИ и получает ответ."""
-    global block_time
+    global is_processing, block_time
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
             await ai_ws.send(message)  # Отправляем запрос в основной ИИ
@@ -49,32 +49,33 @@ async def proxy_websocket(websocket: WebSocket):
             print(f"Received message: {message}")
             
             if is_processing:
+                print("ShrokAI is currently busy. Sending busy message.")
                 await websocket.send_text(BUSY_MESSAGE)
-                continue  # Не передаём сообщение дальше
-
-            # 1. **Ставим is_processing в True сразу после первого запроса**
+                continue  # Не передаём сообщение в ИИ, если он уже обрабатывает запрос
+            
+            # Помечаем, что началась обработка (ДЕЛАЕМ ЭТО СРАЗУ)
             is_processing = True
-
-            # 2. **Рассылаем заглушку всем пользователям моментально**
+            
+            # Оповещаем всех пользователей, что ИИ занят
             for connection in list(active_connections):
                 try:
                     await connection.send_text(BUSY_MESSAGE)
                 except Exception as e:
-                    print(f"Failed to send busy message to client: {e}")
+                    print(f"Failed to send busy message to a client: {e}")
                     active_connections.remove(connection)
 
-            # 3. **Передаём запрос в основной ИИ**
+            # Forward message to AI server
             response = await forward_to_ai(message)
-
-            # 4. **Рассылаем ответ ИИ всем пользователям**
+            
+            # Рассылаем ответ от ИИ всем пользователям
             for connection in list(active_connections):
                 try:
                     await connection.send_text(response)
                 except Exception as e:
                     print(f"Failed to send message to client: {e}")
                     active_connections.remove(connection)
-
-            # 5. **Запускаем таймер разблокировки**
+                    
+            # Стартуем таймер разблокировки
             asyncio.create_task(unblock_after_delay())
 
     except WebSocketDisconnect:
