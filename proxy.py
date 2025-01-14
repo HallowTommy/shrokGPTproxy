@@ -14,7 +14,7 @@ is_processing = False  # Blocks new requests while a response is being generated
 block_time = 0  # Stores the time (in seconds) for which new requests are blocked
 
 # AI WebSocket Server (Main AI Script)
-AI_SERVER_URL = "ws://shrokai.production.up.railway.app/ws/ai"  # Заменить на реальный адрес
+AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"  # Заменить на реальный адрес
 
 # Welcome and busy messages
 WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
