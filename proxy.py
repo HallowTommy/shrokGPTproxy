@@ -16,9 +16,10 @@ block_time = 0  # Stores the time (in seconds) for which new requests are blocke
 # AI WebSocket Server (Main AI Script)
 AI_SERVER_URL = "wss://shrokgpt-production.up.railway.app/ws/ai"
 
-# Welcome and busy messages
+# Welcome and status messages
 WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear you."
 BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complete."
+REQUEST_RECEIVED_MESSAGE = "Request received. Thinking of a reply..."
 
 async def forward_to_ai(message: str):
     """Отправляет запрос в AI и получает ответ."""
@@ -37,14 +38,6 @@ async def forward_to_ai(message: str):
             if processing_data.get("processing"):
                 is_processing = True  # AI подтвердил, что начал работу
                 print("[FORWARD] AI подтвердил, что начал обработку")
-
-                # 🔥 СРАЗУ отправляем заглушку ВСЕМ клиентам
-                for connection in list(active_connections):
-                    try:
-                        await connection.send_text(BUSY_MESSAGE)
-                    except Exception as e:
-                        print(f"[ERROR] Ошибка отправки заглушки клиенту: {e}")
-                        active_connections.remove(connection)
 
             # Ждём финальный ответ от AI
             response = await ai_ws.recv()
@@ -84,7 +77,7 @@ async def proxy_websocket(websocket: WebSocket):
             message = await websocket.receive_text()
             print(f"[MESSAGE] Получено сообщение: {message}")
 
-            # ⚡️ Если AI уже обрабатывает запрос, отправляем заглушку сразу же!
+            # ⚡️ Если AI уже обрабатывает запрос, отправляем заглушку сразу!
             if is_processing:
                 print("[BUSY] AI уже занят, отправляем заглушку клиенту")
                 await websocket.send_text(BUSY_MESSAGE)
@@ -93,6 +86,9 @@ async def proxy_websocket(websocket: WebSocket):
             # ⚡️ Устанавливаем блокировку мгновенно!
             is_processing = True
             print("[PROCESSING] AI взял запрос в обработку")
+
+            # 🔥 Отправляем пользователю сообщение "Запрос принят"
+            await websocket.send_text(REQUEST_RECEIVED_MESSAGE)
 
             # Forward message to AI server
             response = await forward_to_ai(message)
@@ -126,3 +122,4 @@ async def unblock_after_delay():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=9000)
+
