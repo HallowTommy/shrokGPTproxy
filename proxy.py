@@ -21,6 +21,17 @@ WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear yo
 BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complete."
 REQUEST_RECEIVED_MESSAGE = "Request received. Thinking of a reply..."
 
+async def send_busy_message():
+    """Асинхронно рассылает заглушку всем пользователям, если AI уже работает."""
+    while is_processing:
+        for connection in list(active_connections):
+            try:
+                await connection.send_text(BUSY_MESSAGE)
+            except Exception as e:
+                print(f"[ERROR] Ошибка отправки заглушки клиенту: {e}")
+                active_connections.remove(connection)
+        await asyncio.sleep(1)  # Отправлять заглушку каждые 1 сек
+
 async def forward_to_ai(message: str):
     """Отправляет запрос в AI и получает ответ."""
     global is_processing, block_time
@@ -38,6 +49,9 @@ async def forward_to_ai(message: str):
             if processing_data.get("processing"):
                 is_processing = True  # AI подтвердил, что начал работу
                 print("[FORWARD] AI подтвердил, что начал обработку")
+
+                # 🔥 Запускаем поток, который шлет "ShrokAI is busy..." каждые 1 секунду
+                asyncio.create_task(send_busy_message())
 
             # Ждём финальный ответ от AI
             response = await ai_ws.recv()
