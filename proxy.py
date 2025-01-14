@@ -33,12 +33,25 @@ async def forward_to_ai(message: str):
             if processing_data.get("processing"):
                 is_processing = True  # Моментально ставим флаг, что ИИ занят
 
-            response = await ai_ws.recv()  # Ждём финальный ответ от ИИ
-            data = json.loads(response)  # Разбираем JSON-ответ
-            block_time = data.get("audio_length", 0) + 10  # Устанавливаем время блокировки
-            return data.get("response", "ShrokAI is silent...")
+            # Ждём финальный ответ от ИИ
+            response = await ai_ws.recv()
+            
+            # 🔥 Проверяем, является ли response корректным JSON
+            try:
+                data = json.loads(response)
+            except json.JSONDecodeError:
+                print(f"❌ Ошибка декодирования JSON: {response}")
+                return "ShrokAI encountered an issue. Invalid response from AI server."
+            
+            # Проверяем, есть ли в JSON нужные данные
+            if "response" not in data or "audio_length" not in data:
+                print(f"⚠️ Некорректный JSON-ответ от AI: {data}")
+                return "ShrokAI encountered an issue. Missing response data."
+
+            block_time = data["audio_length"] + 10  # Устанавливаем время блокировки
+            return data["response"]
     except Exception as e:
-        print(f"Error communicating with AI server: {e}")
+        print(f"❌ Ошибка связи с AI сервером: {e}")
         return "ShrokAI encountered an issue. Try again later."
 
 @app.websocket("/ws/proxy")
