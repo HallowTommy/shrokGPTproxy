@@ -14,17 +14,25 @@ WELCOME_MESSAGE = "Address me as @ShrokAI and type your message so I can hear yo
 BUSY_MESSAGE = "ShrokAI is busy, please wait for the current response to complete."
 
 async def forward_to_ai(message: str):
-    """Отправляет запрос в основной скрипт ИИ и получает ответ."""
     global is_processing, block_time
     try:
         async with websockets.connect(AI_SERVER_URL) as ai_ws:
             await ai_ws.send(message)
             response = await ai_ws.recv()
-            data = json.loads(response)
-            block_time = data.get("audio_length", 0) + 10  # Время блокировки
-            return data.get("response", "ShrokAI is silent...")
+            
+            print(f"📩 Received response from AI: {response}")  # Лог для проверки
+            
+            data = json.loads(response)  # Разбираем JSON-ответ
+            block_time = data.get("audio_length", 0) + 10
+            
+            ai_response = data.get("response", None)
+            if not ai_response:  # Если нет текста, возвращаем ошибку
+                print("⚠️ AI response is missing! Sending fallback message.")
+                return "ShrokAI encountered an issue. Try again later."
+
+            return ai_response  # Теперь возвращаем реальный ответ от ИИ
     except Exception as e:
-        print(f"Error communicating with AI server: {e}")
+        print(f"🚨 Error communicating with AI server: {e}")
         return "ShrokAI encountered an issue. Try again later."
 
 @app.websocket("/ws/proxy")
