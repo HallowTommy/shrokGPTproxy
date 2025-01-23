@@ -18,7 +18,7 @@ active_connections = set()
 message_queue = asyncio.Queue()
 
 # AI Server WebSocket URL
-AI_SERVER_URL = "wss://your-ai-server-url/ws/ai"
+AI_SERVER_URL = "wss://apigpt-production-351e.up.railway.app/ws/ai"
 
 # Глобальные переменные статуса
 is_processing = False  # AI в процессе обработки?
