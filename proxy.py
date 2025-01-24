@@ -21,8 +21,8 @@ block_time = 0  # Время блокировки перед следующим 
 
 # Сообщения пользователям
 WELCOME_MESSAGE = "Mention @ShrokAI, and I’ll respond… probably. If I’m not lost in a mushroom trip."
-BUSY_MESSAGE = "Thinking... but the mushrooms have other plans for my brain."
-REQUEST_RECEIVED_MESSAGE = "Loud and clear! Now, how about some mushrooms to enhance the conversation?"
+BUSY_MESSAGE = "Thinking... but the mushrooms are taking over my brain. Give me a bit more time."
+REQUEST_RECEIVED_MESSAGE = "Got it, let me think about my response."
 
 async def process_queue():
     """Функция, которая обрабатывает очередь входящих сообщений."""
